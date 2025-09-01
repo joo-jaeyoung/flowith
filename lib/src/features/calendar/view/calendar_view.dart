@@ -1,13 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:table_calendar/table_calendar.dart';
-import 'package:intl/intl.dart';
 import '../../../core/theme.dart';
-import '../../../core/constants.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../data/models/user_model.dart';
-import '../../../data/repositories/session_repository.dart';
-import '../../../data/models/session_model.dart';
 
 /// Calendar 화면 UI
 /// 사용자의 집중 기록을 캘린더 형태로 표시
@@ -22,31 +18,18 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
   late final ValueNotifier<DateTime> _focusedDay;
   late DateTime _selectedDay;
   CalendarFormat _calendarFormat = CalendarFormat.month;
-  List<SessionModel> _selectedDaySessions = [];
 
   @override
   void initState() {
     super.initState();
     _focusedDay = ValueNotifier(DateTime.now());
     _selectedDay = DateTime.now();
-    _loadSelectedDaySessions();
   }
 
   @override
   void dispose() {
     _focusedDay.dispose();
     super.dispose();
-  }
-
-  /// 선택된 날짜의 세션들을 로드
-  Future<void> _loadSelectedDaySessions() async {
-    final sessionRepo = ref.read(sessionRepositoryProvider);
-    final sessions = await sessionRepo.getSessionsByDate(_selectedDay);
-    if (mounted) {
-      setState(() {
-        _selectedDaySessions = sessions;
-      });
-    }
   }
 
   @override
@@ -59,38 +42,33 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
       appBar: AppBar(
         title: const Text('나의 집중 기록'),
         actions: [
-          // 테스트용 버튼 - 오늘 날짜 기록 추가
-          IconButton(
-            icon: const Icon(Icons.add_task),
+          // 테스트 버튼 (개발용)
+          TextButton(
             onPressed: () async {
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('기록을 추가하고 있습니다...')),
-                );
-              }
-              
               try {
                 final authRepo = ref.read(authRepositoryProvider);
                 await authRepo.addTodayAsCompleted();
                 
-                // 잠깐 기다린 후 Provider를 새로고침
-                await Future.delayed(const Duration(milliseconds: 500));
-                ref.invalidate(currentUserModelProvider);
-                
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('✅ 테스트 기록이 추가되었습니다!')),
+                    const SnackBar(
+                      content: Text('테스트 기록이 추가되었습니다!'),
+                      backgroundColor: Colors.green,
+                    ),
                   );
                 }
               } catch (e) {
-                print('Error adding test record: $e');
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('❌ 오류 발생: $e')),
+                    SnackBar(
+                      content: Text('오류가 발생했습니다: $e'),
+                      backgroundColor: Colors.red,
+                    ),
                   );
                 }
               }
             },
+            child: const Text('테스트'),
           ),
         ],
       ),
@@ -116,437 +94,321 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
                   completedDates: [], // 빈 완료 날짜 리스트
                 );
               }
-              
-              // 디버깅용 로그
-              print('CalendarView - User completed dates: ${user.completedDates.length} dates');
-              for (final date in user.completedDates) {
-                print('  - ${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}');
-              }
 
-          // 완료된 날짜들을 Set으로 변환 (빠른 조회를 위해)
-          final completedDatesSet = user.completedDates.map((date) {
-            return DateTime(date.year, date.month, date.day);
-          }).toSet();
+              // 완료된 날짜들을 Set으로 변환 (빠른 조회를 위해)
+              final completedDatesSet = user.completedDates.map((date) {
+                return DateTime(date.year, date.month, date.day);
+              }).toSet();
 
-          return Column(
-            children: [
-              // 캘린더
-              Container(
-                color: AppTheme.surfaceWhite,
-                child: TableCalendar<dynamic>(
-                  firstDay: DateTime.utc(2020, 1, 1),
-                  lastDay: DateTime.utc(2030, 12, 31),
-                  focusedDay: _focusedDay.value,
-                  calendarFormat: _calendarFormat,
-                  locale: 'ko_KR',
-                  
-                  // 스타일 설정
-                  calendarStyle: CalendarStyle(
-                    outsideDaysVisible: false,
-                    weekendTextStyle: const TextStyle(color: AppTheme.textPrimary),
-                    holidayTextStyle: const TextStyle(color: AppTheme.textPrimary),
-                    
-                    // 선택된 날짜 스타일
-                    selectedDecoration: BoxDecoration(
-                      color: AppTheme.primaryGreen.withValues(alpha: 0.3),
-                      shape: BoxShape.circle,
-                    ),
-                    selectedTextStyle: const TextStyle(
-                      color: AppTheme.primaryGreen,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    
-                    // 오늘 날짜 스타일
-                    todayDecoration: BoxDecoration(
-                      color: AppTheme.lightGreen.withValues(alpha: 0.5),
-                      shape: BoxShape.circle,
-                    ),
-                    todayTextStyle: const TextStyle(
-                      color: AppTheme.textPrimary,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    
-                    // 마커 스타일
-                    markerDecoration: const BoxDecoration(
-                      color: AppTheme.primaryGreen,
-                      shape: BoxShape.circle,
-                    ),
-                    markersMaxCount: 1,
-                    markersAlignment: Alignment.bottomCenter,
-                  ),
-                  
-                  // 헤더 스타일
-                  headerStyle: const HeaderStyle(
-                    formatButtonVisible: true,
-                    titleCentered: true,
-                    formatButtonShowsNext: false,
-                    formatButtonDecoration: BoxDecoration(
-                      color: AppTheme.lightGreen,
-                      borderRadius: BorderRadius.all(Radius.circular(12.0)),
-                    ),
-                    formatButtonTextStyle: TextStyle(
-                      color: AppTheme.textPrimary,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    leftChevronIcon: Icon(
-                      Icons.chevron_left,
-                      color: AppTheme.textPrimary,
-                    ),
-                    rightChevronIcon: Icon(
-                      Icons.chevron_right,
-                      color: AppTheme.textPrimary,
-                    ),
-                    titleTextStyle: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.textPrimary,
-                    ),
-                  ),
-                  
-                  // 날짜 선택 핸들러
-                  selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-                  onDaySelected: (selectedDay, focusedDay) {
-                    setState(() {
-                      _selectedDay = selectedDay;
-                      _focusedDay.value = focusedDay;
-                    });
-                    _loadSelectedDaySessions();
-                  },
-                  
-                  // 포맷 변경 핸들러
-                  onFormatChanged: (format) {
-                    setState(() {
-                      _calendarFormat = format;
-                    });
-                  },
-                  
-                  // 페이지 변경 핸들러
-                  onPageChanged: (focusedDay) {
-                    _focusedDay.value = focusedDay;
-                  },
-                  
-                  // 이벤트 로더 (완료된 날짜에 마커 표시)
-                  eventLoader: (day) {
-                    final dateOnly = DateTime(day.year, day.month, day.day);
-                    if (completedDatesSet.contains(dateOnly)) {
-                      return ['completed']; // 마커 표시용 더미 이벤트
-                    }
-                    return [];
-                  },
-                  
-                  // 커스텀 빌더
-                  calendarBuilders: CalendarBuilders(
-                    // 마커 빌더 (식물 아이콘)
-                    markerBuilder: (context, date, events) {
-                      if (events.isNotEmpty) {
-                        return Positioned(
-                          bottom: 4,
-                          child: Container(
-                            width: 16,
-                            height: 16,
-                            decoration: const BoxDecoration(
+              return SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      // 캘린더
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.1),
+                              blurRadius: 10,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: TableCalendar<dynamic>(
+                          firstDay: DateTime.utc(2020, 1, 1),
+                          lastDay: DateTime.utc(2030, 12, 31),
+                          focusedDay: _focusedDay.value,
+                          selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+                          calendarFormat: _calendarFormat,
+                          
+                          // 날짜 선택 핸들러
+                          onDaySelected: (selectedDay, focusedDay) {
+                            setState(() {
+                              _selectedDay = selectedDay;
+                              _focusedDay.value = focusedDay;
+                            });
+                          },
+                          
+                          // 포맷 변경 핸들러
+                          onFormatChanged: (format) {
+                            setState(() {
+                              _calendarFormat = format;
+                            });
+                          },
+                          
+                          // 헤더 스타일
+                          headerStyle: const HeaderStyle(
+                            formatButtonVisible: false,
+                            titleCentered: true,
+                            leftChevronIcon: Icon(Icons.chevron_left),
+                            rightChevronIcon: Icon(Icons.chevron_right),
+                          ),
+                          
+                          // 캘린더 스타일
+                          calendarStyle: const CalendarStyle(
+                            outsideDaysVisible: false,
+                            markersMaxCount: 1,
+                            markerDecoration: BoxDecoration(
                               color: AppTheme.primaryGreen,
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(
-                              Icons.eco,
-                              size: 10,
-                              color: Colors.white,
+                            selectedDecoration: BoxDecoration(
+                              color: AppTheme.primaryGreen,
+                              shape: BoxShape.circle,
+                            ),
+                            todayDecoration: BoxDecoration(
+                              color: AppTheme.primaryGreen,
+                              shape: BoxShape.circle,
                             ),
                           ),
-                        );
-                      }
-                      return null;
-                    },
-                  ),
-                ),
-              ),
-              
-              // 세션 세부 정보 섹션
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(AppConstants.kDefaultPadding),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 선택된 날짜 헤더
-                      Row(
-                        children: [
-                          Text(
-                            DateFormat('yyyy년 MM월 dd일').format(_selectedDay),
-                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
+                          
+                          // 이벤트 로더 - 완료된 날짜에 마커 표시
+                          eventLoader: (day) {
+                            final dayWithoutTime = DateTime(day.year, day.month, day.day);
+                            return completedDatesSet.contains(dayWithoutTime) ? ['completed'] : [];
+                          },
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 24),
+                      
+                      // 선택된 날짜 정보
+                      _buildSelectedDateInfo(completedDatesSet),
+                      
+                      const SizedBox(height: 16),
+                      
+                      // 통계 정보
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.1),
+                              blurRadius: 10,
+                              offset: const Offset(0, 2),
                             ),
-                          ),
-                          const Spacer(),
-                          if (_selectedDaySessions.isNotEmpty)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primaryGreen.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(12),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              '집중 통계',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
                               ),
-                              child: Text(
-                                '${_selectedDaySessions.length}개 세션',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: AppTheme.primaryGreen,
-                                  fontWeight: FontWeight.w500,
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: [
+                                _buildStatItem(
+                                  '총 집중 일수',
+                                  '${user.completedDates.length}일',
+                                  Icons.calendar_today,
                                 ),
-                              ),
+                                _buildStatItem(
+                                  '이번 주',
+                                  '${_getThisWeekCount(user.completedDates)}일',
+                                  Icons.date_range,
+                                ),
+                                _buildStatItem(
+                                  '연속 기록',
+                                  '${_getStreakCount(user.completedDates)}일',
+                                  Icons.local_fire_department,
+                                ),
+                              ],
                             ),
-                        ],
+                          ],
+                        ),
                       ),
-                      
-                      const SizedBox(height: AppConstants.kDefaultPadding),
-                      
-                      // 세션 목록
-                      Expanded(
-                        child: _selectedDaySessions.isEmpty
-                            ? _buildEmptyState(context)
-                            : ListView.separated(
-                                itemCount: _selectedDaySessions.length,
-                                separatorBuilder: (context, index) => 
-                                    const SizedBox(height: AppConstants.kSmallPadding),
-                                itemBuilder: (context, index) {
-                                  final session = _selectedDaySessions[index];
-                                  return _buildSessionCard(context, session);
-                                },
-                              ),
-                      ),
-                      
-                      const SizedBox(height: AppConstants.kDefaultPadding),
-                      
-                      // 일간 요약 통계
-                      if (_selectedDaySessions.isNotEmpty)
-                        _buildDaySummary(context, _selectedDaySessions),
                     ],
                   ),
                 ),
-              ),
-            ],
-          );
+              );
             },
-            loading: () => const Center(
-              child: CircularProgressIndicator(),
-            ),
-            error: (err, stack) => Center(
-              child: Text('사용자 정보를 가져올 수 없습니다: $err'),
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (error, stack) => Center(
+              child: Text('오류가 발생했습니다: $error'),
             ),
           );
         },
-        loading: () => const Center(
-          child: CircularProgressIndicator(),
-        ),
-        error: (err, stack) => Center(
-          child: Text('인증 오류가 발생했습니다: $err'),
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, stack) => Center(
+          child: Text('오류가 발생했습니다: $error'),
         ),
       ),
     );
   }
 
-  /// 세션 카드 빌드
-  Widget _buildSessionCard(BuildContext context, SessionModel session) {
+  /// 선택된 날짜 정보 위젯
+  Widget _buildSelectedDateInfo(Set<DateTime> completedDatesSet) {
+    final selectedDayWithoutTime = DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day);
+    final isCompleted = completedDatesSet.contains(selectedDayWithoutTime);
+    final isToday = isSameDay(_selectedDay, DateTime.now());
+    
     return Container(
-      padding: const EdgeInsets.all(AppConstants.kDefaultPadding),
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceWhite,
-        borderRadius: BorderRadius.circular(AppConstants.kDefaultRadius),
-        border: Border.all(color: AppTheme.dividerColor),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 헤더 (룸명과 시간)
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  session.roomName,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryGreen.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '${session.durationMinutes}분',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppTheme.primaryGreen,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          
-          const SizedBox(height: AppConstants.kSmallPadding),
-          
-          // 시간 정보
           Row(
             children: [
               Icon(
-                Icons.access_time,
-                size: 16,
-                color: AppTheme.textSecondary,
+                Icons.calendar_today,
+                color: AppTheme.primaryGreen,
+                size: 24,
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 8),
               Text(
-                session.timeRangeString,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppTheme.textSecondary,
+                '${_selectedDay.year}년 ${_selectedDay.month}월 ${_selectedDay.day}일',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
+              if (isToday) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryGreen.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Text(
+                    '오늘',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.primaryGreen,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
-          
-          const SizedBox(height: AppConstants.kSmallPadding),
-          
-          // 참여자 정보
+          const SizedBox(height: 16),
           Row(
             children: [
               Icon(
-                session.isSoloSession ? Icons.person : Icons.group,
-                size: 16,
-                color: AppTheme.textSecondary,
+                isCompleted ? Icons.check_circle : Icons.cancel,
+                color: isCompleted ? AppTheme.primaryGreen : Colors.grey,
+                size: 20,
               ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  session.isSoloSession 
-                      ? '혼자 집중'
-                      : '${session.participantNamesString} (${session.participants.length}명)',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppTheme.textSecondary,
-                  ),
-                  overflow: TextOverflow.ellipsis,
+              const SizedBox(width: 8),
+              Text(
+                isCompleted ? '집중 완료' : '집중하지 않음',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isCompleted ? AppTheme.primaryGreen : Colors.grey,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ],
           ),
+          if (isCompleted) ...[
+            const SizedBox(height: 8),
+            Text(
+              '이 날에 집중 세션을 완료했습니다! 🌱',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  /// 빈 상태 위젯
-  Widget _buildEmptyState(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.event_busy,
-            size: 48,
-            color: AppTheme.textSecondary.withValues(alpha: 0.5),
-          ),
-          const SizedBox(height: AppConstants.kDefaultPadding),
-          Text(
-            '이날은 집중 기록이 없어요',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: AppTheme.textSecondary,
-            ),
-          ),
-          const SizedBox(height: AppConstants.kSmallPadding),
-          Text(
-            '집중 세션을 완료하면 여기에 기록됩니다',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: AppTheme.textSecondary.withValues(alpha: 0.7),
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 일간 요약 위젯
-  Widget _buildDaySummary(BuildContext context, List<SessionModel> sessions) {
-    final totalMinutes = sessions.fold(0, (total, session) => total + session.durationMinutes);
-    final totalSessions = sessions.length;
-    final uniqueParticipants = sessions
-        .expand((s) => s.participants)
-        .map((p) => p.uid)
-        .toSet()
-        .length;
-
-    return Container(
-      padding: const EdgeInsets.all(AppConstants.kDefaultPadding),
-      decoration: BoxDecoration(
-        color: AppTheme.lightGreen.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(AppConstants.kDefaultRadius),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '이날의 요약',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: AppConstants.kSmallPadding),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildSummaryItem(
-                context,
-                '총 집중 시간',
-                '${totalMinutes}분',
-                Icons.timer,
-              ),
-              _buildSummaryItem(
-                context,
-                '세션 횟수',
-                '${totalSessions}회',
-                Icons.refresh,
-              ),
-              _buildSummaryItem(
-                context,
-                '함께한 친구',
-                '${uniqueParticipants}명',
-                Icons.people,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 요약 아이템 위젯
-  Widget _buildSummaryItem(
-    BuildContext context,
-    String label,
-    String value,
-    IconData icon,
-  ) {
+  /// 통계 아이템 위젯
+  Widget _buildStatItem(String title, String value, IconData icon) {
     return Column(
       children: [
         Icon(
           icon,
-          size: 20,
+          size: 32,
           color: AppTheme.primaryGreen,
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 8),
         Text(
           value,
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+          style: const TextStyle(
+            fontSize: 18,
             fontWeight: FontWeight.bold,
             color: AppTheme.primaryGreen,
           ),
         ),
         Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: AppTheme.textSecondary,
+          title,
+          style: const TextStyle(
+            fontSize: 12,
+            color: Colors.grey,
           ),
         ),
       ],
     );
+  }
+
+  /// 이번 주 집중 일수 계산
+  int _getThisWeekCount(List<DateTime> completedDates) {
+    final now = DateTime.now();
+    final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+    final endOfWeek = startOfWeek.add(const Duration(days: 6));
+    
+    return completedDates.where((date) {
+      return date.isAfter(startOfWeek.subtract(const Duration(days: 1))) &&
+          date.isBefore(endOfWeek.add(const Duration(days: 1)));
+    }).length;
+  }
+
+  /// 연속 집중 일수 계산
+  int _getStreakCount(List<DateTime> completedDates) {
+    if (completedDates.isEmpty) return 0;
+
+    // 날짜를 오름차순으로 정렬
+    final sortedDates = [...completedDates]..sort();
+    final today = DateTime.now();
+    
+    int streak = 0;
+    DateTime currentDate = DateTime(today.year, today.month, today.day);
+    
+    // 오늘부터 거꾸로 체크하면서 연속된 날짜인지 확인
+    for (int i = sortedDates.length - 1; i >= 0; i--) {
+      final completedDate = DateTime(
+        sortedDates[i].year,
+        sortedDates[i].month,
+        sortedDates[i].day,
+      );
+      
+      if (completedDate.isAtSameMomentAs(currentDate)) {
+        streak++;
+        currentDate = currentDate.subtract(const Duration(days: 1));
+      } else {
+        break;
+      }
+    }
+    
+    return streak;
   }
 }

@@ -4,22 +4,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/room_model.dart';
 import '../../core/constants.dart';
 import 'auth_repository.dart';
-import 'session_repository.dart';
 
 /// 스터디 룸 관련 비즈니스 로직을 처리하는 Repository
 /// Firestore와 연동하여 룸 생성, 참여, 타이머 관리 등을 담당
 class RoomRepository {
   final FirebaseFirestore _firestore;
   final AuthRepository _authRepository;
-  late final SessionRepository _sessionRepository;
 
   RoomRepository({
     FirebaseFirestore? firestore,
     required AuthRepository authRepository,
   })  : _firestore = firestore ?? FirebaseFirestore.instance,
-        _authRepository = authRepository {
-    _sessionRepository = SessionRepository(authRepository: authRepository);
-  }
+        _authRepository = authRepository;
 
   /// 룸 컬렉션 참조
   CollectionReference<Map<String, dynamic>> get _roomsCollection =>
@@ -216,15 +212,12 @@ class RoomRepository {
       if (roomSnapshot.exists) {
         final room = RoomModel.fromFirestore(roomSnapshot);
         
-        // 상세한 세션 기록 저장
-        await _sessionRepository.saveSession(room);
-        
-        // 각 참여자의 completedDates 업데이트 (기존 기능 유지)
+        // 각 참여자의 completedDates 업데이트
         for (final participant in room.participants) {
           await _updateUserCompletedDate(participant.uid);
         }
         
-        debugPrint('Timer finished and session saved for room: $roomId');
+        debugPrint('Timer finished for room: $roomId');
       }
     } catch (e) {
       debugPrint('Error finishing timer: $e');
