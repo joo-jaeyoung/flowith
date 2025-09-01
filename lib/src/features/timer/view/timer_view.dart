@@ -7,7 +7,7 @@ import '../../../data/repositories/room_repository.dart';
 
 /// Timer 화면 UI
 /// 집중 시간 동안 타이머와 식물 성장을 표시
-class TimerView extends ConsumerWidget {
+class TimerView extends ConsumerStatefulWidget {
   final String roomId;
 
   const TimerView({
@@ -16,17 +16,48 @@ class TimerView extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final timerState = ref.watch(timerViewModelProvider(roomId));
-    final timerViewModel = ref.read(timerViewModelProvider(roomId).notifier);
-    final roomStream = ref.watch(roomStreamProvider(roomId));
+  ConsumerState<TimerView> createState() => _TimerViewState();
+}
+
+class _TimerViewState extends ConsumerState<TimerView> with TickerProviderStateMixin {
+  late AnimationController _progressController;
+  late Animation<double> _progressAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _progressController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1), // 기본값, 실제 타이머 시간으로 업데이트됨
+    );
+    _progressAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _progressController, curve: Curves.linear),
+    );
+  }
+
+  @override
+  void dispose() {
+    _progressController.dispose();
+    super.dispose();
+  }
+
+  void _startProgressAnimation(int durationSeconds) {
+    _progressController.duration = Duration(seconds: durationSeconds);
+    _progressController.forward();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final timerState = ref.watch(timerViewModelProvider(widget.roomId));
+    final timerViewModel = ref.read(timerViewModelProvider(widget.roomId).notifier);
+    final roomStream = ref.watch(roomStreamProvider(widget.roomId));
 
     // 타이머가 종료되면 Result 화면으로 이동
     if (timerState.isFinishing) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         Navigator.of(context).pushReplacementNamed(
           '/result',
-          arguments: roomId,
+          arguments: widget.roomId,
         );
       });
     }
@@ -60,6 +91,15 @@ class TimerView extends ConsumerWidget {
               child: CircularProgressIndicator(),
             ),
           );
+        }
+
+        // 타이머가 시작되었을 때 애니메이션 시작
+        if (room.timerState == AppConstants.roomStateRunning && 
+            !_progressController.isAnimating && 
+            _progressController.value == 0.0) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _startProgressAnimation(room.setDurationSeconds);
+          });
         }
 
         return Scaffold(
@@ -177,74 +217,84 @@ class TimerView extends ConsumerWidget {
     );
   }
 
-  /// 타이머 섹션
+  /// 타이머 섹션 (개선된 진행률)
   Widget _buildTimerSection(BuildContext context, TimerState state, room) {
     final progress = room.getProgress();
     
-    return Column(
-      children: [
-        // 큰 타이머 표시
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(AppConstants.kLargePadding),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(AppConstants.kLargeRadius),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.1),
-                blurRadius: 20,
-                offset: const Offset(0, 4),
-              ),
-            ],
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppConstants.kLargePadding),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(AppConstants.kLargeRadius),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
           ),
-          child: Column(
+        ],
+      ),
+      child: Column(
+        children: [
+          // 원형 진행률과 타이머
+          Stack(
+            alignment: Alignment.center,
             children: [
-              Text(
-                state.formattedTime,
-                style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                  fontSize: 56,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.primaryGreen,
-                  fontFeatures: const [FontFeature.tabularFigures()],
+              // 원형 진행률 배경
+              SizedBox(
+                width: 200,
+                height: 200,
+                child: CircularProgressIndicator(
+                  value: 1.0, // 배경 원
+                  strokeWidth: 12,
+                  backgroundColor: Colors.grey[200],
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.grey[200]!),
                 ),
               ),
-              const SizedBox(height: 16),
-              // 진행률 바
-              Container(
-                height: 8,
-                decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: FractionallySizedBox(
-                  alignment: Alignment.centerLeft,
-                  widthFactor: progress,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          AppTheme.primaryGreen,
-                          AppTheme.lightGreen,
-                        ],
+              // 원형 진행률 실제 값 (연속 애니메이션)
+              SizedBox(
+                width: 200,
+                height: 200,
+                child: AnimatedBuilder(
+                  animation: _progressAnimation,
+                  builder: (context, child) {
+                    final animatedProgress = _progressAnimation.value;
+                    return CircularProgressIndicator(
+                      value: animatedProgress,
+                      strokeWidth: 12,
+                      backgroundColor: Colors.transparent,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        animatedProgress > 0.8 
+                          ? AppTheme.primaryGreen 
+                          : animatedProgress > 0.5 
+                            ? AppTheme.lightGreen 
+                            : AppTheme.primaryGreen.withValues(alpha: 0.7),
                       ),
-                      borderRadius: BorderRadius.circular(4),
+                      strokeCap: StrokeCap.round,
+                    );
+                  },
+                ),
+              ),
+              // 중앙의 타이머 텍스트
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    state.formattedTime,
+                    style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                      fontSize: 36,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.primaryGreen,
+                      fontFeatures: const [FontFeature.tabularFigures()],
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '${(progress * 100).toInt()}% 완료',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                ),
+                ],
               ),
             ],
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
