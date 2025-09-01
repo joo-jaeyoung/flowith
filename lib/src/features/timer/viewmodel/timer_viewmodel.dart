@@ -7,26 +7,22 @@ import '../../../core/constants.dart';
 /// Timer 화면의 상태를 나타내는 클래스
 class TimerState {
   final int remainingSeconds;
-  final int plantStage;
   final bool isFinishing;
   final String? errorMessage;
 
   TimerState({
     this.remainingSeconds = 0,
-    this.plantStage = 0,
     this.isFinishing = false,
     this.errorMessage,
   });
 
   TimerState copyWith({
     int? remainingSeconds,
-    int? plantStage,
     bool? isFinishing,
     String? errorMessage,
   }) {
     return TimerState(
       remainingSeconds: remainingSeconds ?? this.remainingSeconds,
-      plantStage: plantStage ?? this.plantStage,
       isFinishing: isFinishing ?? this.isFinishing,
       errorMessage: errorMessage,
     );
@@ -77,11 +73,9 @@ class TimerViewModel extends StateNotifier<TimerState> {
     // 타이머가 실행 중인 경우
     if (room.timerState == AppConstants.roomStateRunning) {
       final remainingSeconds = room.getRemainingSeconds();
-      final plantStage = room.getPlantStage();
       
       state = state.copyWith(
         remainingSeconds: remainingSeconds,
-        plantStage: plantStage,
       );
 
       // 타이머가 없으면 시작
@@ -106,9 +100,6 @@ class TimerViewModel extends StateNotifier<TimerState> {
           remainingSeconds: state.remainingSeconds - 1,
         );
 
-        // 진행률에 따른 식물 단계 계산
-        // 이것은 룸 정보에서도 업데이트되지만, 로컬에서도 계산하여 부드러운 UI 제공
-        _updatePlantStage();
 
         // 시간이 다 되면 종료 처리
         if (state.remainingSeconds <= 0) {
@@ -124,12 +115,6 @@ class TimerViewModel extends StateNotifier<TimerState> {
     _timer = null;
   }
 
-  /// 식물 성장 단계 업데이트
-  void _updatePlantStage() {
-    // 서버에서 받은 룸 정보를 기반으로 계산하는 것이 더 정확하지만,
-    // 로컬에서도 대략적인 계산을 수행
-    // 실제 단계는 룸 정보 업데이트 시 동기화됨
-  }
 
   /// 타이머 종료 처리
   Future<void> _finishTimer() async {
