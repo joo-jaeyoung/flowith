@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 인증된 사용자만 접근 가능
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // 사용자 문서 규칙
+    match /users/{userId} {
+      // 인증된 사용자는 자신의 문서만 읽기/쓰기 가능
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // 룸 문서 규칙
+    match /rooms/{roomId} {
+      // 모든 인증된 사용자가 룸 읽기 가능
+      allow read: if isAuthenticated();
+      
+      // 인증된 사용자는 룸 생성 가능
+      allow create: if isAuthenticated() 
+        && request.resource.data.hostUid == request.auth.uid
+        && request.resource.data.participants.size() >= 1;
+      
+      // 호스트나 참가자만 룸 업데이트 가능
+      allow update: if isAuthenticated() 
+        && (resource.data.hostUid == request.auth.uid 
+          || request.auth.uid in resource.data.participants[*].uid);
+      
+      // 호스트만 룸 삭제 가능
+      allow delete: if isAuthenticated() 
+        && resource.data.hostUid == request.auth.uid;
+    }
+  }
+}
