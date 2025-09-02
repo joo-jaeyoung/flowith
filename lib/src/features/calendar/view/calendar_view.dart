@@ -19,7 +19,6 @@ class CalendarView extends ConsumerStatefulWidget {
 class _CalendarViewState extends ConsumerState<CalendarView> {
   late final ValueNotifier<DateTime> _focusedDay;
   late DateTime _selectedDay;
-  CalendarFormat _calendarFormat = CalendarFormat.month;
 
   @override
   void initState() {
@@ -77,6 +76,15 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
                     children: [
+                      // 통계 정보 (캘린더 위쪽으로 이동)
+                      _buildStatsSection({
+                        'totalDays': user.completedDates.length,
+                        'thisWeekDays': _getThisWeekCount(user.completedDates),
+                        'streakDays': _getStreakCount(user.completedDates),
+                      }),
+                      
+                      const SizedBox(height: 24),
+                      
                       // 캘린더
                       Container(
                         decoration: BoxDecoration(
@@ -95,7 +103,8 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
                           lastDay: DateTime.utc(2030, 12, 31),
                           focusedDay: _focusedDay.value,
                           selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-                          calendarFormat: _calendarFormat,
+                          calendarFormat: CalendarFormat.month, // 월간뷰로 고정
+                          startingDayOfWeek: StartingDayOfWeek.monday,
                           
                           // 날짜 선택 핸들러
                           onDaySelected: (selectedDay, focusedDay) {
@@ -105,16 +114,14 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
                             });
                           },
                           
-                          // 포맷 변경 핸들러
-                          onFormatChanged: (format) {
-                            setState(() {
-                              _calendarFormat = format;
-                            });
+                          // 페이지 변경 핸들러
+                          onPageChanged: (focusedDay) {
+                            _focusedDay.value = focusedDay;
                           },
                           
-                          // 헤더 스타일
+                          // 헤더 스타일 (포맷 버튼 제거)
                           headerStyle: const HeaderStyle(
-                            formatButtonVisible: false,
+                            formatButtonVisible: false, // 포맷 버튼 완전 제거
                             titleCentered: true,
                             leftChevronIcon: Icon(Icons.chevron_left),
                             rightChevronIcon: Icon(Icons.chevron_right),
@@ -138,6 +145,9 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
                             ),
                           ),
                           
+                          // 자동 축소 방지 설정
+                          sixWeekMonthsEnforced: false,
+                          
                           // 이벤트 로더 - 완료된 날짜에 마커 표시
                           eventLoader: (day) {
                             final dayWithoutTime = DateTime(day.year, day.month, day.day);
@@ -150,15 +160,6 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
                       
                       // 선택된 날짜 정보 및 세션 목록
                       _buildSelectedDateInfo(completedDatesSet),
-                      
-                      const SizedBox(height: 16),
-                      
-                      // 통계 정보 (기존 방식 사용)
-                      _buildStatsSection({
-                        'totalDays': user.completedDates.length,
-                        'thisWeekDays': _getThisWeekCount(user.completedDates),
-                        'streakDays': _getStreakCount(user.completedDates),
-                      }),
                     ],
                   ),
                 ),
@@ -182,93 +183,14 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
   Widget _buildSelectedDateInfo(Set<DateTime> completedDatesSet) {
     final selectedDayWithoutTime = DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day);
     final isCompleted = completedDatesSet.contains(selectedDayWithoutTime);
-    final isToday = isSameDay(_selectedDay, DateTime.now());
     
-    return Column(
-      children: [
-        // 날짜 헤더
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.1),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.calendar_today,
-                    color: AppTheme.primaryGreen,
-                    size: 24,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${_selectedDay.year}년 ${_selectedDay.month}월 ${_selectedDay.day}일',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  if (isToday) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryGreen.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Text(
-                        '오늘',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppTheme.primaryGreen,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Icon(
-                    isCompleted ? Icons.check_circle : Icons.cancel,
-                    color: isCompleted ? AppTheme.primaryGreen : Colors.grey,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    isCompleted ? '집중 완료' : '집중하지 않음',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: isCompleted ? AppTheme.primaryGreen : Colors.grey,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        
-        // 해당 날짜의 세션 목록
-        if (isCompleted) ...[
-          const SizedBox(height: 16),
-          _buildSessionsList(_selectedDay),
-        ],
-      ],
-    );
+    // 집중한 날짜를 선택했을 때만 세션 목록 표시
+    if (isCompleted) {
+      return _buildSessionsList(_selectedDay);
+    }
+    
+    // 집중하지 않은 날짜는 아무것도 표시하지 않음
+    return const SizedBox.shrink();
   }
 
   /// 특정 날짜의 세션 목록 위젯
