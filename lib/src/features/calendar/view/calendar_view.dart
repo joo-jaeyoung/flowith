@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../../../core/theme.dart';
 import '../../../data/repositories/auth_repository.dart';
+import '../../../data/repositories/session_repository.dart';
 import '../../../data/models/user_model.dart';
+import '../../../data/models/session_model.dart';
 
 /// Calendar 화면 UI
 /// 사용자의 집중 기록을 캘린더 형태로 표시
@@ -34,43 +36,14 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
 
   @override
   Widget build(BuildContext context) {
-    final currentUserAsync = ref.watch(currentUserModelProvider);
     final authState = ref.watch(authStateProvider);
+    final currentUserAsync = ref.watch(currentUserModelProvider);
+    final statsAsync = ref.watch(userStatsProvider);
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundWhite,
       appBar: AppBar(
         title: const Text('나의 집중 기록'),
-        actions: [
-          // 테스트 버튼 (개발용)
-          TextButton(
-            onPressed: () async {
-              try {
-                final authRepo = ref.read(authRepositoryProvider);
-                await authRepo.addTodayAsCompleted();
-                
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('테스트 기록이 추가되었습니다!'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('오류가 발생했습니다: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              }
-            },
-            child: const Text('테스트'),
-          ),
-        ],
       ),
       body: authState.when(
         data: (firebaseUser) {
@@ -80,7 +53,6 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
             );
           }
           
-          // Firebase User가 있으면 currentUserModel을 가져옴
           return currentUserAsync.when(
             data: (user) {
               if (user == null) {
@@ -176,60 +148,17 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
                       
                       const SizedBox(height: 24),
                       
-                      // 선택된 날짜 정보
+                      // 선택된 날짜 정보 및 세션 목록
                       _buildSelectedDateInfo(completedDatesSet),
                       
                       const SizedBox(height: 16),
                       
-                      // 통계 정보
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.1),
-                              blurRadius: 10,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              '집중 통계',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceAround,
-                              children: [
-                                _buildStatItem(
-                                  '총 집중 일수',
-                                  '${user.completedDates.length}일',
-                                  Icons.calendar_today,
-                                ),
-                                _buildStatItem(
-                                  '이번 주',
-                                  '${_getThisWeekCount(user.completedDates)}일',
-                                  Icons.date_range,
-                                ),
-                                _buildStatItem(
-                                  '연속 기록',
-                                  '${_getStreakCount(user.completedDates)}일',
-                                  Icons.local_fire_department,
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
+                      // 통계 정보 (기존 방식 사용)
+                      _buildStatsSection({
+                        'totalDays': user.completedDates.length,
+                        'thisWeekDays': _getThisWeekCount(user.completedDates),
+                        'streakDays': _getStreakCount(user.completedDates),
+                      }),
                     ],
                   ),
                 ),
@@ -255,6 +184,294 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
     final isCompleted = completedDatesSet.contains(selectedDayWithoutTime);
     final isToday = isSameDay(_selectedDay, DateTime.now());
     
+    return Column(
+      children: [
+        // 날짜 헤더
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.calendar_today,
+                    color: AppTheme.primaryGreen,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${_selectedDay.year}년 ${_selectedDay.month}월 ${_selectedDay.day}일',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (isToday) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryGreen.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Text(
+                        '오늘',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.primaryGreen,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Icon(
+                    isCompleted ? Icons.check_circle : Icons.cancel,
+                    color: isCompleted ? AppTheme.primaryGreen : Colors.grey,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    isCompleted ? '집중 완료' : '집중하지 않음',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isCompleted ? AppTheme.primaryGreen : Colors.grey,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        
+        // 해당 날짜의 세션 목록
+        if (isCompleted) ...[
+          const SizedBox(height: 16),
+          _buildSessionsList(_selectedDay),
+        ],
+      ],
+    );
+  }
+
+  /// 특정 날짜의 세션 목록 위젯
+  Widget _buildSessionsList(DateTime date) {
+    final sessionsAsync = ref.watch(userSessionsByDateProvider(date));
+    
+    return sessionsAsync.when(
+      data: (sessions) {
+        if (sessions.isEmpty) {
+          return Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: const Text(
+              '이 날의 집중 기록이 없습니다.',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey,
+              ),
+            ),
+          );
+        }
+
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                child: Text(
+                  '이 날의 집중 세션 (${sessions.length}개)',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(20),
+                itemCount: sessions.length,
+                separatorBuilder: (context, index) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final session = sessions[index];
+                  return _buildSessionCard(session);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+      loading: () => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: const Center(child: CircularProgressIndicator()),
+      ),
+      error: (error, stack) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Text(
+          '세션 정보를 불러오는데 실패했습니다: $error',
+          style: const TextStyle(color: Colors.red),
+        ),
+      ),
+    );
+  }
+
+  /// 개별 세션 카드 위젯
+  Widget _buildSessionCard(SessionModel session) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.primaryGreen.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: AppTheme.primaryGreen.withValues(alpha: 0.2),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 세션 기본 정보
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryGreen,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  session.formattedDuration,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  session.roomName,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Text(
+                session.formattedStartTime,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 8),
+          
+          // 참여자 정보
+          Row(
+            children: [
+              Icon(
+                Icons.group,
+                size: 16,
+                color: Colors.grey[600],
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '${session.participants.length}명 참여',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  session.participants.map((p) => p.displayName).join(', '),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 통계 섹션 위젯
+  Widget _buildStatsSection(Map<String, int> stats) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -272,71 +489,78 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(
-                Icons.calendar_today,
-                color: AppTheme.primaryGreen,
-                size: 24,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '${_selectedDay.year}년 ${_selectedDay.month}월 ${_selectedDay.day}일',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              if (isToday) ...[
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryGreen.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Text(
-                    '오늘',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppTheme.primaryGreen,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ],
+          const Text(
+            '집중 통계',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           const SizedBox(height: 16),
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              Icon(
-                isCompleted ? Icons.check_circle : Icons.cancel,
-                color: isCompleted ? AppTheme.primaryGreen : Colors.grey,
-                size: 20,
+              _buildStatItem(
+                '총 집중 일수',
+                '${stats['totalDays']}일',
+                Icons.calendar_today,
               ),
-              const SizedBox(width: 8),
-              Text(
-                isCompleted ? '집중 완료' : '집중하지 않음',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: isCompleted ? AppTheme.primaryGreen : Colors.grey,
-                  fontWeight: FontWeight.w500,
-                ),
+              _buildStatItem(
+                '이번 주',
+                '${stats['thisWeekDays']}일',
+                Icons.date_range,
+              ),
+              _buildStatItem(
+                '연속 기록',
+                '${stats['streakDays']}일',
+                Icons.local_fire_department,
               ),
             ],
           ),
-          if (isCompleted) ...[
-            const SizedBox(height: 8),
-            Text(
-              '이 날에 집중 세션을 완료했습니다! 🌱',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-              ),
-            ),
-          ],
         ],
+      ),
+    );
+  }
+
+  /// 통계 로딩 위젯
+  Widget _buildStatsLoadingSection() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: const Center(child: CircularProgressIndicator()),
+    );
+  }
+
+  /// 통계 에러 위젯
+  Widget _buildStatsErrorSection() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: const Text(
+        '통계 정보를 불러오는데 실패했습니다.',
+        style: TextStyle(color: Colors.red),
       ),
     );
   }

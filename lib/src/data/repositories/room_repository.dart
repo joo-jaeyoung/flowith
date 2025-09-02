@@ -2,8 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/room_model.dart';
+import '../models/session_model.dart';
 import '../../core/constants.dart';
 import 'auth_repository.dart';
+import 'session_repository.dart';
 
 /// 스터디 룸 관련 비즈니스 로직을 처리하는 Repository
 /// Firestore와 연동하여 룸 생성, 참여, 타이머 관리 등을 담당
@@ -212,6 +214,11 @@ class RoomRepository {
       if (roomSnapshot.exists) {
         final room = RoomModel.fromFirestore(roomSnapshot);
         
+        // 세션 정보 저장 (직접 Firestore에 저장)
+        if (room.startTime != null && room.endTime != null) {
+          await _saveSession(room);
+        }
+        
         // 각 참여자의 completedDates 업데이트
         for (final participant in room.participants) {
           await _updateUserCompletedDate(participant.uid);
@@ -222,6 +229,38 @@ class RoomRepository {
     } catch (e) {
       debugPrint('Error finishing timer: $e');
       throw Exception('타이머 종료에 실패했습니다: $e');
+    }
+  }
+
+  /// 세션 정보 저장
+  Future<void> _saveSession(RoomModel room) async {
+    try {
+      final sessionDoc = _firestore.collection('sessions').doc();
+      
+      final sessionParticipants = room.participants
+          .map((p) => {
+                'uid': p.uid,
+                'displayName': p.displayName,
+                'photoUrl': p.photoUrl,
+              })
+          .toList();
+
+      final sessionData = {
+        'roomId': room.roomId,
+        'roomName': room.roomName,
+        'hostUid': room.hostUid,
+        'participants': sessionParticipants,
+        'durationSeconds': room.setDurationSeconds,
+        'startTime': Timestamp.fromDate(room.startTime!),
+        'endTime': Timestamp.fromDate(room.endTime!),
+        'createdAt': FieldValue.serverTimestamp(),
+      };
+
+      await sessionDoc.set(sessionData);
+      debugPrint('Session saved: ${sessionDoc.id}');
+    } catch (e) {
+      debugPrint('Error saving session: $e');
+      // 세션 저장 실패해도 전체 타이머 종료는 계속 진행
     }
   }
 
