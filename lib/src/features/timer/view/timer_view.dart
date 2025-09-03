@@ -265,11 +265,7 @@ class _TimerViewState extends ConsumerState<TimerView> with TickerProviderStateM
                       strokeWidth: 12,
                       backgroundColor: Colors.transparent,
                       valueColor: AlwaysStoppedAnimation<Color>(
-                        animatedProgress > 0.8 
-                          ? AppTheme.primaryGreen 
-                          : animatedProgress > 0.5 
-                            ? AppTheme.lightGreen 
-                            : AppTheme.primaryGreen.withValues(alpha: 0.7),
+                        _getProgressiveColor(animatedProgress),
                       ),
                       strokeCap: StrokeCap.round,
                     );
@@ -296,6 +292,13 @@ class _TimerViewState extends ConsumerState<TimerView> with TickerProviderStateM
         ],
       ),
     );
+  }
+
+  /// 진행률에 따라 점진적으로 진해지는 색상 반환
+  Color _getProgressiveColor(double progress) {
+    // 진행률에 따라 알파값을 0.3에서 1.0으로 점진적으로 증가
+    final alpha = 0.3 + (progress * 0.7); // 0.3 ~ 1.0
+    return AppTheme.primaryGreen.withValues(alpha: alpha);
   }
 
   /// 집중 상태 섹션 (간소화)

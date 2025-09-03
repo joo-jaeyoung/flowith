@@ -76,15 +76,6 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
                     children: [
-                      // 통계 정보 (캘린더 위쪽으로 이동)
-                      _buildStatsSection({
-                        'totalDays': user.completedDates.length,
-                        'thisWeekDays': _getThisWeekCount(user.completedDates),
-                        'streakDays': _getStreakCount(user.completedDates),
-                      }),
-                      
-                      const SizedBox(height: 24),
-                      
                       // 캘린더
                       Container(
                         decoration: BoxDecoration(
@@ -155,6 +146,15 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
                           },
                         ),
                       ),
+                      
+                      const SizedBox(height: 24),
+                      
+                      // 통계 정보 (캘린더 아래로 이동)
+                      _buildStatsSection({
+                        'totalDays': user.completedDates.length,
+                        'thisWeekDays': _getThisWeekCount(user.completedDates),
+                        'streakDays': _getStreakCount(user.completedDates),
+                      }),
                       
                       const SizedBox(height: 24),
                       
