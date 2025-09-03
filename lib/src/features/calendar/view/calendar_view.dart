@@ -119,20 +119,32 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
                           ),
                           
                           // 캘린더 스타일
-                          calendarStyle: const CalendarStyle(
+                          calendarStyle: CalendarStyle(
                             outsideDaysVisible: false,
-                            markersMaxCount: 1,
-                            markerDecoration: BoxDecoration(
+                            markersMaxCount: 0, // 기본 마커 사용 안 함
+                            // 선택된 날짜 (진한 초록 배경)
+                            selectedDecoration: const BoxDecoration(
                               color: AppTheme.primaryGreen,
                               shape: BoxShape.circle,
                             ),
-                            selectedDecoration: BoxDecoration(
-                              color: AppTheme.primaryGreen,
-                              shape: BoxShape.circle,
+                            selectedTextStyle: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
                             ),
+                            // 오늘 날짜 (테두리 강조)
                             todayDecoration: BoxDecoration(
-                              color: AppTheme.primaryGreen,
+                              color: Colors.transparent,
                               shape: BoxShape.circle,
+                              border: Border.all(
+                                color: AppTheme.primaryGreen,
+                                width: 2.5,
+                              ),
+                            ),
+                            todayTextStyle: const TextStyle(
+                              color: AppTheme.primaryGreen,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
                             ),
                           ),
                           
@@ -144,6 +156,106 @@ class _CalendarViewState extends ConsumerState<CalendarView> {
                             final dayWithoutTime = DateTime(day.year, day.month, day.day);
                             return completedDatesSet.contains(dayWithoutTime) ? ['completed'] : [];
                           },
+                          
+                          // 커스텀 날짜 빌더 - 모든 날짜의 집중 완료 표시
+                          calendarBuilders: CalendarBuilders(
+                            // 기본 날짜 빌더 (집중 완료 표시)
+                            defaultBuilder: (context, date, _) {
+                              final dayWithoutTime = DateTime(date.year, date.month, date.day);
+                              final hasEvent = completedDatesSet.contains(dayWithoutTime);
+                              
+                              if (hasEvent) {
+                                return Container(
+                                  margin: const EdgeInsets.all(4.0),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primaryGreen.withValues(alpha: 0.15),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: AppTheme.primaryGreen.withValues(alpha: 0.3),
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      '${date.day}',
+                                      style: const TextStyle(
+                                        color: AppTheme.primaryGreen,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }
+                              return null; // 기본 스타일 사용
+                            },
+                            
+                            // 오늘 날짜 빌더
+                            todayBuilder: (context, date, _) {
+                              final dayWithoutTime = DateTime(date.year, date.month, date.day);
+                              final hasEvent = completedDatesSet.contains(dayWithoutTime);
+                              
+                              return Container(
+                                margin: const EdgeInsets.all(4.0),
+                                decoration: BoxDecoration(
+                                  color: hasEvent ? AppTheme.primaryGreen.withValues(alpha: 0.15) : Colors.transparent,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: AppTheme.primaryGreen,
+                                    width: 2.5,
+                                  ),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    '${date.day}',
+                                    style: const TextStyle(
+                                      color: AppTheme.primaryGreen,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                            
+                            // 선택된 날짜 빌더
+                            selectedBuilder: (context, date, _) {
+                              final isToday = isSameDay(date, DateTime.now());
+                              final dayWithoutTime = DateTime(date.year, date.month, date.day);
+                              final hasEvent = completedDatesSet.contains(dayWithoutTime);
+                              
+                              return Container(
+                                margin: const EdgeInsets.all(4.0),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primaryGreen,
+                                  shape: BoxShape.circle,
+                                  border: isToday 
+                                    ? Border.all(
+                                        color: AppTheme.primaryGreen,
+                                        width: 3.0,
+                                      )
+                                    : null,
+                                  boxShadow: isToday ? [
+                                    BoxShadow(
+                                      color: AppTheme.primaryGreen.withValues(alpha: 0.4),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ] : null,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    '${date.day}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
                         ),
                       ),
                       
