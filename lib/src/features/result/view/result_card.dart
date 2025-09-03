@@ -67,7 +67,7 @@ class ResultCard extends StatelessWidget {
           
           // 메인 메시지
           Text(
-            '함께 $focusTime분을\n집중했어요!',
+            '함께 $focusTime\n집중했어요!',
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
               color: AppTheme.primaryGreen,
               fontWeight: FontWeight.bold,

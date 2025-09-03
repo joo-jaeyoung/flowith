@@ -49,9 +49,8 @@ class _ResultViewState extends ConsumerState<ResultView> {
           );
         }
 
-        // 집중 시간 계산 (분 단위)
-        final focusMinutes = room.setDurationSeconds ~/ 60;
-        final focusTime = focusMinutes.toString();
+        // 집중 시간 계산 (분:초 형식)
+        final focusTime = _formatDuration(room.setDurationSeconds);
 
         return Scaffold(
           backgroundColor: AppTheme.backgroundWhite,
@@ -265,6 +264,20 @@ class _ResultViewState extends ConsumerState<ResultView> {
       if (mounted) {
         setState(() => _isSharing = false);
       }
+    }
+  }
+
+  /// 시간을 포맷된 문자열로 변환
+  String _formatDuration(int totalSeconds) {
+    final minutes = totalSeconds ~/ 60;
+    final seconds = totalSeconds % 60;
+    
+    if (seconds == 0) {
+      return '${minutes}분';
+    } else if (minutes == 0) {
+      return '${seconds}초';
+    } else {
+      return '${minutes}분 ${seconds}초';
     }
   }
 }
